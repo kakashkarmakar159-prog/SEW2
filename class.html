@@ -21,9 +21,11 @@ function escapeHtml(s){
 }
 
 async function loadJSON(path){
-  const r=await fetch(path);
-  if(!r.ok) throw new Error('Cannot load '+path);
-  return r.json();
+  const candidates=[path];
+  if(location.pathname.includes('/frontend/')) candidates.push('../'+path);
+  let last;
+  for(const candidate of candidates){try{const r=await fetch(candidate,{cache:'no-store'});if(r.ok)return await r.json();last=new Error('HTTP '+r.status+' '+candidate)}catch(e){last=e}}
+  throw last||new Error('Cannot load '+path);
 }
 
 function params(){ return new URLSearchParams(location.search); }
@@ -118,29 +120,63 @@ document.addEventListener('DOMContentLoaded',()=>{
 const ICONS={bangla:'📖',english:'🔤',physics:'⚛️','life-science':'🧬',mathematics:'➗',geography:'🌍',history:'🏛️','computer-science':'💻',accountancy:'🧾','commercial-law':'⚖️','cost-tax':'💰','business-studies':'💼','political-science':'🏛️','রাষ্ট্রবিজ্ঞান':'📚'};
 const LABELS={bangla:'Bengali',english:'English',physics:'Physics','life-science':'Life Science',mathematics:'Mathematics',geography:'Geography',history:'History','computer-science':'Computer Science',accountancy:'Accountancy','commercial-law':'Commercial Law','cost-tax':'Cost Tax','business-studies':'Business Studies','political-science':'Political Science','রাষ্ট্রবিজ্ঞান':'রাষ্ট্রবিজ্ঞান'};
 const FALLBACK_SUBJECTS=[
-{id:'bangla',name:'বাংলা',english:'Bengali'},{id:'english',name:'ইংরেজি',english:'English'},
-{id:'physics',name:'Physics',english:'Physics'},{id:'life-science',name:'Life Science',english:'Life Science'},
-{id:'mathematics',name:'গণিত',english:'Mathematics'},{id:'geography',name:'ভূগোল',english:'Geography'},
-{id:'history',name:'ইতিহাস',english:'History'},{id:'computer-science',name:'Computer Science',english:'Computer Science'},
-{id:'accountancy',name:'Accountancy',english:'Accountancy'},{id:'commercial-law',name:'Commercial Law',english:'Commercial Law'},
-{id:'cost-tax',name:'Cost Tax',english:'Cost Tax'},{id:'business-studies',name:'Business Studies',english:'Business Studies'},
-{id:'political-science',name:'Political Science',english:'Political Science'}];
+{id:'bangla',name:'বাংলা',english:'Bengali'},{id:'english',name:'ইংরেজি',english:'English'},{id:'physics',name:'Physics',english:'Physics'},
+{id:'life-science',name:'Life Science',english:'Life Science'},{id:'mathematics',name:'গণিত',english:'Mathematics'},{id:'geography',name:'ভূগোল',english:'Geography'},
+{id:'history',name:'ইতিহাস',english:'History'},{id:'computer-science',name:'Computer Science',english:'Computer Science'},{id:'accountancy',name:'Accountancy',english:'Accountancy'},
+{id:'commercial-law',name:'Commercial Law',english:'Commercial Law'},{id:'cost-tax',name:'Cost Tax',english:'Cost Tax'},{id:'business-studies',name:'Business Studies',english:'Business Studies'},
+{id:'political-science',name:'Political Science',english:'Political Science'},{id:'রাষ্ট্রবিজ্ঞান',name:'রাষ্ট্রবিজ্ঞান',english:'রাষ্ট্রবিজ্ঞান'}];
+const FALLBACK_CLASSES=[
+{id:'class5',name:'Class 5',subjects:['bangla','english','physics','life-science','mathematics','geography','history']},
+{id:'class6',name:'Class 6',subjects:['bangla','english','physics','life-science','mathematics','geography','history']},
+{id:'class7',name:'Class 7',subjects:['bangla','english','physics','life-science','mathematics','geography','history']},
+{id:'class8',name:'Class 8',subjects:['bangla','english','physics','life-science','mathematics','geography','history']},
+{id:'class9',name:'Class 9',subjects:['bangla','english','physics','life-science','mathematics','geography','history']},
+{id:'class10',name:'Class 10',subjects:['bangla','english','physics','life-science','mathematics','geography','history']},
+{id:'class11-science',name:'Class 11 Science',subjects:['bangla','english','physics','life-science','mathematics','computer-science']},
+{id:'class12-science',name:'Class 12 Science',subjects:['bangla','english','physics','life-science','mathematics','computer-science']},
+{id:'class11-commerce',name:'Class 11 Commerce',subjects:['accountancy','commercial-law','cost-tax','business-studies']},
+{id:'class12-commerce',name:'Class 12 Commerce',subjects:['accountancy','commercial-law','cost-tax','business-studies']},
+{id:'class11-arts',name:'Class 11 Arts',subjects:['bangla','english','geography','history','political-science','রাষ্ট্রবিজ্ঞান']},
+{id:'class12-arts',name:'Class 12 Arts',subjects:['bangla','english','geography','history','political-science','রাষ্ট্রবিজ্ঞান']}];
+
+async function loadJSONSafe(path){
+  const candidates=[path];
+  if(location.pathname.includes('/frontend/')) candidates.push('../'+path);
+  for(const candidate of candidates){
+    try{const r=await fetch(candidate,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
+  }
+  throw new Error('Cannot load '+path);
+}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function getClassId(){return new URLSearchParams(location.search).get('class')||'class5';}
+function getSemester(){const raw=new URLSearchParams(location.search).get('semester')||'1';return ['1','2','3','4'].includes(raw)?raw:'1';}
 
 async function init(){
- const p=params(),id=p.get('class')||'class5';
- let sem=(p.get('semester')||'1').match(/[1-4]/)?.[0]||'1';
- let classes=[],subjects=[];
- try{classes=await loadJSON('data/classes.json');}catch(e){classes=FALLBACK_CLASSES;console.warn('Using built-in class data',e)}
- try{subjects=await loadJSON('data/subjects.json');}catch(e){subjects=FALLBACK_SUBJECTS;console.warn('Using built-in subject data',e)}
- const c=classes.find(x=>x.id===id)||classes.find(x=>x.id==='class5')||classes[0]||FALLBACK_CLASSES[0];
- document.getElementById('pageTitle').textContent=c.name;
- document.getElementById('heading').textContent=c.name+' — Practice Subjects';
- const select=document.getElementById('semesterSelect');
- select.value=sem;
- select.onchange=()=>{const next=select.value;history.replaceState(null,'',`class.html?class=${encodeURIComponent(c.id)}&semester=${encodeURIComponent(next)}`);render(c,next,subjects)};
- render(c,sem,subjects);
+  const id=getClassId(); let sem=getSemester();
+  let classes=FALLBACK_CLASSES.slice(); let subjects=FALLBACK_SUBJECTS.slice();
+  try{const remote=await loadJSONSafe('data/classes.json');if(Array.isArray(remote)&&remote.length)classes=remote;}catch(e){console.warn('Using built-in class data:',e)}
+  try{const remote=await loadJSONSafe('data/subjects.json');if(Array.isArray(remote)&&remote.length)subjects=remote;}catch(e){console.warn('Using built-in subject data:',e)}
+  const c=classes.find(x=>x.id===id)||FALLBACK_CLASSES.find(x=>x.id===id)||FALLBACK_CLASSES[0];
+  document.getElementById('pageTitle').textContent=c.name;
+  document.getElementById('heading').textContent=c.name+' — Practice Subjects';
+  const select=document.getElementById('semesterSelect');
+  select.value=sem;
+  select.onchange=()=>{sem=select.value;history.replaceState(null,'',`class.html?class=${encodeURIComponent(c.id)}&semester=${encodeURIComponent(sem)}`);render(c,sem,subjects)};
+  render(c,sem,subjects);
 }
-function render(c,sem,subjects){const grid=document.getElementById('subjectGrid');grid.innerHTML=c.subjects.map(s=>{const x=subjects.find(y=>y.id===s);const name=x?.name||LABELS[s]||s;const en=x?.english||LABELS[s]||s;const url=`practice-exam.html?class=${encodeURIComponent(c.id)}&semester=${encodeURIComponent(sem)}&subject=${encodeURIComponent(s)}`;const sol=`${url}&showSolutions=1`;return `<article class="card subject-card" data-practice-url="${url}" tabindex="0" role="button"><div class="emoji">${ICONS[s]||'📚'}</div><h3>${escapeHtml(name)}</h3><p>${escapeHtml(en)} • Semester ${sem}</p><div class="subject-card-actions"><a class="primary" href="${url}" onclick="event.stopPropagation()">Practice →</a><button class="solution-chip" type="button" onclick="event.stopPropagation();location.href='${sol}'">Solutions</button></div></article>`}).join('');grid.querySelectorAll('.subject-card').forEach(card=>{card.addEventListener('click',()=>location.href=card.dataset.practiceUrl);card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();location.href=card.dataset.practiceUrl}})});}
-init().catch(console.error);
-
+function render(c,sem,subjects){
+  const grid=document.getElementById('subjectGrid');
+  const list=Array.isArray(c.subjects)&&c.subjects.length?c.subjects:FALLBACK_CLASSES[0].subjects;
+  grid.innerHTML=list.map(s=>{
+    const x=subjects.find(y=>y.id===s); const name=x?.name||LABELS[s]||s; const en=x?.english||LABELS[s]||s;
+    const url=`practice-exam.html?class=${encodeURIComponent(c.id)}&semester=${encodeURIComponent(sem)}&subject=${encodeURIComponent(s)}`;
+    const sol=`${url}&showSolutions=1`;
+    return `<article class="card subject-card" data-practice-url="${url}" tabindex="0" role="button"><div class="emoji">${ICONS[s]||'📚'}</div><h3>${esc(name)}</h3><p>${esc(en)} • Semester ${sem}</p><div class="subject-card-actions"><a class="primary" href="${url}" onclick="event.stopPropagation()">Practice →</a><button class="solution-chip" type="button" onclick="event.stopPropagation();location.href='${sol}'">Solutions</button></div></article>`;
+  }).join('');
+  grid.querySelectorAll('.subject-card').forEach(card=>{
+    card.addEventListener('click',()=>location.href=card.dataset.practiceUrl);
+    card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();location.href=card.dataset.practiceUrl}});
+  });
+}
+init().catch(e=>{console.error(e);render(FALLBACK_CLASSES.find(x=>x.id===getClassId())||FALLBACK_CLASSES[0],getSemester(),FALLBACK_SUBJECTS)});
 </script></body></html>
